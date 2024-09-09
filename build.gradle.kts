@@ -8,7 +8,6 @@ import org.gradle.api.tasks.testing.logging.TestLogEvent
 import org.jetbrains.dokka.Platform.jvm
 import org.jetbrains.dokka.gradle.DokkaMultiModuleTask
 import org.jetbrains.dokka.gradle.DokkaTask
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import org.jmailen.gradle.kotlinter.KotlinterPlugin
 
 plugins {
@@ -20,6 +19,7 @@ plugins {
     alias(libs.plugins.jetbrains.kotlin.android) apply false
 
     // Build
+    alias(libs.plugins.google.ksp) apply false
     alias(libs.plugins.google.dagger.hilt.android) apply false
 
     // Static Analysis
@@ -55,22 +55,6 @@ allprojects {
             showStackTraces = true
         }
     }
-
-    tasks {
-        withType<KotlinCompile> {
-            kotlinOptions {
-                jvmTarget = "17"
-                allWarningsAsErrors = true
-                // https://issuetracker.google.com/issues/217593040
-                freeCompilerArgs = freeCompilerArgs + "-Xjvm-default=all"
-            }
-        }
-
-        withType<JavaCompile> {
-            sourceCompatibility = "${JavaVersion.VERSION_17}"
-            targetCompatibility = "${JavaVersion.VERSION_17}"
-        }
-    }
 }
 
 subprojects {
@@ -104,8 +88,10 @@ subprojects {
 
     plugins.apply(KotlinterPlugin::class)
 
-    // Code coverage
-    apply(from = "${rootProject.projectDir}/gradle/jacoco.gradle.kts")
+    if (this.name != "bom") {
+        // Code coverage
+        apply(from = "${rootProject.projectDir}/gradle/jacoco.gradle.kts")
+    }
 
     /**
      * Ideally this would be migrated out of the project level build.gradle.kts to the [DocumentationPlugin],
@@ -123,7 +109,7 @@ subprojects {
                 reportUndocumented.set(true)
                 skipEmptyPackages.set(false)
                 platform.set(jvm)
-                jdkVersion.set(11)
+                jdkVersion.set(21)
                 noStdlibLink.set(false)
                 noJdkLink.set(false)
                 noAndroidSdkLink.set(false)
@@ -141,4 +127,8 @@ subprojects {
         // Check for updates every build
         resolutionStrategy.cacheChangingModulesFor(0, "seconds")
     }
+}
+
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
+    jvmTargetValidationMode.set(org.jetbrains.kotlin.gradle.dsl.jvm.JvmTargetValidationMode.ERROR)
 }

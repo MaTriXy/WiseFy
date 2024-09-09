@@ -1,6 +1,6 @@
 plugins {
     id(libs.plugins.java.platform.get().pluginId)
-    id(libs.plugins.wisefy.android.publish.get().pluginId)
+    id(libs.plugins.wisefy.android.bom.publish.get().pluginId)
 }
 
 javaPlatform {

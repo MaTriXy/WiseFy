@@ -1,5 +1,5 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.io.File
-import java.util.Locale
 
 plugins {
     id("com.android.library")
@@ -10,8 +10,8 @@ android {
     // START HACK - https://github.com/gradle/gradle/issues/15383
     val libs = extensions.getByType<VersionCatalogsExtension>().named("libs")
     val buildToolsVersionFromLibs = libs.findVersion("build-tools-version").get().requiredVersion
-    val compileSdkFromLibs = libs.findVersion("sdk-compile").get().requiredVersion
-    val minSdkFromLibs = libs.findVersion("sdk-min").get().requiredVersion
+    val compileSdkFromLibs = libs.findVersion("sdk-compile-version").get().requiredVersion
+    val minSdkFromLibs = libs.findVersion("sdk-min-version").get().requiredVersion
     val jacocoVersionFromLibs = libs.findVersion("jacoco-version").get().requiredVersion
     // END HACK
 
@@ -27,11 +27,11 @@ android {
     }
 
     signingConfigs {
-        create("release${name.capitalize(Locale.ROOT)}") {
+        create("release") {
             storeFile = File("${rootDir}/keystores/wisefy-release.jks")
-            keyAlias = System.getenv("WISEFY_RELEASE_KEY_ALIAS")
-            storePassword = System.getenv("WISEFY_RELEASE_PASSWORD")
-            keyPassword = System.getenv("WISEFY_RELEASE_PASSWORD")
+            keyAlias = properties["WISEFY_RELEASE_KEY_ALIAS"]?.toString() ?: System.getenv("WISEFY_RELEASE_KEY_ALIAS")
+            storePassword = properties["WISEFY_RELEASE_PASSWORD"]?.toString() ?: System.getenv("WISEFY_RELEASE_PASSWORD")
+            keyPassword = properties["WISEFY_RELEASE_PASSWORD"]?.toString() ?: System.getenv("WISEFY_RELEASE_PASSWORD")
         }
     }
 
@@ -58,7 +58,7 @@ android {
                 "${rootDir}/proguard/r8-lib-release.pro"
             )
             consumerProguardFile("${rootDir}/proguard/r8-lib-consumer.pro")
-            signingConfig = signingConfigs.getByName("release${project.name.capitalize(Locale.ROOT)}")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -84,8 +84,16 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
+
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_21)
+            allWarningsAsErrors = true
+        }
+        jvmToolchain(21)
     }
 
     afterEvaluate {

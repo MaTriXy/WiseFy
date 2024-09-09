@@ -1,31 +1,4 @@
-import com.android.build.gradle.LibraryExtension
 import java.net.URI
-
-//import com.isupatches.android.wisefy.build.plugins.DEVELOPER_EMAIL
-//import com.isupatches.android.wisefy.build.plugins.DEVELOPER_ID
-//import com.isupatches.android.wisefy.build.plugins.DEVELOPER_NAME
-//import com.isupatches.android.wisefy.build.plugins.GROUP_ID
-//import com.isupatches.android.wisefy.build.plugins.LIBRARY_CONNECTION
-//import com.isupatches.android.wisefy.build.plugins.LIBRARY_DESCRIPTION
-//import com.isupatches.android.wisefy.build.plugins.LIBRARY_NAME
-//import com.isupatches.android.wisefy.build.plugins.LIBRARY_URL
-//import com.isupatches.android.wisefy.build.plugins.LICENSE_NAME
-//import com.isupatches.android.wisefy.build.plugins.LICENSE_URL
-//import java.net.URI
-
-private val groupId = "com.isupatches.android.wisefy"
-
-private val developerId = "isuPatches"
-private val developerName = "Patches Barrett"
-private val developerEmail = "isuPatches@yahoo.com"
-
-private val libraryConnection = "https://github.com/isuPatches/android-wisefy.git"
-private val libraryDescription = "Wrapper around WifiManager and ConnectivityManager for Android."
-private val libraryName = "Wisefy"
-private val libraryUrl = "https://github.com/isuPatches/android-wisefy"
-
-private val licenseName = "The Apache License, Version 2.0"
-private val licenseUrl = "http://www.apache.org/licenses/LICENSE-2.0.txt"
 
 plugins {
     id("wisefy-android-documentation")
@@ -34,149 +7,134 @@ apply<MavenPublishPlugin>()
 apply<SigningPlugin>()
 
 // Set group on publishing modules so composite build can pick them up without dependency substitution
-group = groupId
+group = GROUP_ID
 
-if (project is LibraryExtension) {
-    configure<LibraryExtension> {
-        tasks.create<Jar>("javadocJar") {
-            group = JavaBasePlugin.DOCUMENTATION_GROUP
-            description = "Assembles Kotlin docs with Dokka"
-            archiveClassifier.set("javadoc")
-            from(tasks.getByName("dokkaGfm"))
-            dependsOn(tasks.getByName("dokkaGfm"))
-        }
+// Called when publishing debug publications
+tasks.register<Jar>("debugSourcesJar") {
+    from("src/main/kotlin")
+    from("src/debug/kotlin")
+    archiveClassifier.set("sources")
+}
 
-        tasks.create<Jar>("sourcesJar") {
-            archiveClassifier.set("sources")
-            from(sourceSets.getByName("main").java.srcDirs)
-        }
+// Called when publishing release publications
+tasks.register<Jar>("releaseSourcesJar") {
+    from("src/main/kotlin")
+    from("src/release/kotlin")
+    archiveClassifier.set("sources")
+}
 
-        publishing {
-            singleVariant("debug") {
-                withSourcesJar()
-                if (System.getenv("GENERATE_DOCS_FOR_DEBUG_PUBLICATIONS").toBoolean()) {
-                    withJavadocJar()
-                }
+// Called for both debug and release publications
+tasks.register<Jar>("javadocJar") {
+    group = JavaBasePlugin.DOCUMENTATION_GROUP
+    description = "Assembles Kotlin docs with Dokka"
+    archiveClassifier.set("javadoc")
+    from(tasks.getByName("dokkaGfm"))
+    dependsOn(tasks.getByName("dokkaGfm"))
+}
+
+configure<PublishingExtension> {
+    // Configure repositories
+    repositories {
+        maven {
+            name = "Release"
+            url = URI("https://oss.sonatype.org/service/local/staging/deploy/maven2")
+            credentials {
+                username =
+                    properties["SONATYPE_USERNAME"]?.toString() ?: System.getenv("SONATYPE_USERNAME")
+                password =
+                    properties["SONATYPE_PASSWORD"]?.toString() ?: System.getenv("SONATYPE_PASSWORD")
             }
+        }
 
-            singleVariant("release") {
-                withSourcesJar()
-                withJavadocJar()
+        maven {
+            name = "Snapshot"
+            url = URI("https://oss.sonatype.org/content/repositories/snapshots")
+            credentials {
+                username =
+                    properties["SONATYPE_USERNAME"]?.toString() ?: System.getenv("SONATYPE_USERNAME")
+                password =
+                    properties["SONATYPE_PASSWORD"]?.toString() ?: System.getenv("SONATYPE_PASSWORD")
             }
         }
     }
-}
 
-afterEvaluate {
-    configure<PublishingExtension> {
-        publications {
-            whenObjectAdded {
-                if (this is MavenPublication) {
-                    groupId = groupId
-                    artifactId = name
+    // Configure signing
+    configure<SigningExtension> {
+        val signingKeyId = properties["WISEFY_GPG_SIGNING_KEY_ID"]?.toString() ?: System.getenv("WISEFY_GPG_SIGNING_KEY_ID")
+        val signingKey = properties["WISEFY_GPG_SIGNING_KEY"]?.toString() ?: System.getenv("WISEFY_GPG_SIGNING_KEY")
+        val signingKeyPassword = properties["WISEFY_GPG_SIGNING_PASSWORD"]?.toString() ?: System.getenv("WISEFY_GPG_SIGNING_PASSWORD")
+        useInMemoryPgpKeys(signingKeyId, signingKey, signingKeyPassword)
+        sign(publications)
+    }
 
-                    plugins.withId("com.android.library") {
-                        from(components[name])
-                    }
+    // Configure publications
+    publications {
+        create<MavenPublication>("debug") {
+            groupId = GROUP_ID
+            artifactId = project.name
+            version = project.version.toString()
 
-                    plugins.withType<JavaPlatformPlugin> {
-                        from(components["javaPlatform"])
-                    }
-                }
+            afterEvaluate {
+                from(project.components["debug"])
+                artifact(tasks.getByName("javadocJar"))
             }
 
-            create<MavenPublication>("debug") {
-                groupId = groupId
-                artifactId = when (project.name) {
-                    "bom" -> "wisefy-${project.name}"
-                    else -> project.name
+            pom {
+                name.set(LIBRARY_NAME)
+                description.set(LIBRARY_DESCRIPTION)
+                url.set(LIBRARY_URL)
+                licenses {
+                    license {
+                        name.set(LICENSE_NAME)
+                        url.set(LICENSE_URL)
+                    }
                 }
-                version = project.version.toString()
-
-                pom {
-                    name.set(libraryName)
-                    description.set(libraryDescription)
-                    url.set(libraryUrl)
-                    licenses {
-                        license {
-                            name.set(licenseName)
-                            url.set(licenseUrl)
-                        }
+                developers {
+                    developer {
+                        id.set(DEVELOPER_ID)
+                        name.set(DEVELOPER_NAME)
+                        email.set(DEVELOPER_EMAIL)
                     }
-                    developers {
-                        developer {
-                            id.set(developerId)
-                            name.set(developerName)
-                            email.set(developerEmail)
-                        }
-                    }
-                    scm {
-                        connection.set(libraryConnection)
-                        developerConnection.set(libraryConnection)
-                        url.set(libraryDescription)
-                    }
+                }
+                scm {
+                    connection.set(LIBRARY_CONNECTION)
+                    developerConnection.set(LIBRARY_CONNECTION)
+                    url.set(LIBRARY_DESCRIPTION)
                 }
             }
+        }
 
-            create<MavenPublication>("release") {
-                groupId = groupId
-                artifactId = when (project.name) {
-                    "bom" -> "wisefy-${project.name}"
-                    else -> project.name
-                }
-                version = project.version.toString()
+        create<MavenPublication>("release") {
+            groupId = GROUP_ID
+            artifactId = project.name
+            version = project.version.toString()
 
-                pom {
-                    name.set(libraryName)
-                    description.set(libraryDescription)
-                    url.set(libraryUrl)
-                    licenses {
-                        license {
-                            name.set(licenseName)
-                            url.set(licenseUrl)
-                        }
-                    }
-                    developers {
-                        developer {
-                            id.set(developerId)
-                            name.set(developerName)
-                            email.set(developerEmail)
-                        }
-                    }
-                    scm {
-                        connection.set(libraryConnection)
-                        developerConnection.set(libraryConnection)
-                        url.set(libraryUrl)
-                    }
-                }
-
-                repositories {
-                    maven {
-                        name = "Release"
-                        url = URI("https://oss.sonatype.org/service/local/staging/deploy/maven2")
-                        credentials {
-                            username = providers.gradleProperty("SONATYPE_USERNAME").get()
-                            password = providers.gradleProperty("SONATYPE_PASSWORD").get()
-                        }
-                    }
-
-                    maven {
-                        name = "Snapshot"
-                        url = URI("https://oss.sonatype.org/content/repositories/snapshots")
-                        credentials {
-                            username = providers.gradleProperty("SONATYPE_USERNAME").get()
-                            password = providers.gradleProperty("SONATYPE_PASSWORD").get()
-                        }
-                    }
-                }
+            afterEvaluate {
+                from(project.components["release"])
             }
 
-            configure<SigningExtension> {
-                val signingKeyId: String = providers.gradleProperty("WISEFY_GPG_SIGNING_KEY_ID").get()
-                val signingKey: String = providers.gradleProperty("WISEFY_GPG_SIGNING_KEY").get()
-                val signingPassword: String = providers.gradleProperty("WISEFY_GPG_SIGNING_PASSWORD").get()
-                useInMemoryPgpKeys(signingKeyId, signingKey, signingPassword)
-                sign(publications)
+            pom {
+                name.set(LIBRARY_NAME)
+                description.set(LIBRARY_DESCRIPTION)
+                url.set(LIBRARY_URL)
+                licenses {
+                    license {
+                        name.set(LICENSE_NAME)
+                        url.set(LICENSE_URL)
+                    }
+                }
+                developers {
+                    developer {
+                        id.set(DEVELOPER_ID)
+                        name.set(DEVELOPER_NAME)
+                        email.set(DEVELOPER_EMAIL)
+                    }
+                }
+                scm {
+                    connection.set(LIBRARY_CONNECTION)
+                    developerConnection.set(LIBRARY_CONNECTION)
+                    url.set(LIBRARY_DESCRIPTION)
+                }
             }
         }
     }
